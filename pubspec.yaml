@@ -1,9 +1,7 @@
 name: js_engine
 description: "A lite javascript engine for VVMate."
 version: 1.1.0
-repository:
-  type: git
-  url: https://github.com/ruilin/flutter_js_engine.git
+repository: https://github.com/ruilin/flutter_js_engine
 
 environment:
   sdk: '>=3.3.1 <4.0.0'
@@ -62,7 +60,3 @@ flutter:
   #
   # For details regarding fonts in packages, see
   # https://flutter.dev/custom-fonts/#from-packages
-author:
-  name: Ruilin
-  email: zruilin@126.com
-  url: https://ruilin.github.io/blog
