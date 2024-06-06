@@ -109,4 +109,4 @@ JsEngine.runCode('''
 ```
 
 ---
-By [Ruilin.z](https://ruilin.github.io/blog/)
+Author: [Ruilin.z](https://ruilin.github.io/blog/)
