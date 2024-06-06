@@ -1,5 +1,5 @@
-name: js_engine
-description: "A lite javascript engine for VVMate."
+name: flutter_js_engine
+description: "A lite javascript engine."
 version: 1.1.0
 repository: https://github.com/ruilin/flutter_js_engine
 
