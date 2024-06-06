@@ -1,0 +1,168 @@
+library js_runner;
+
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_js/flutter_js.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+
+// #docregion platform_imports
+// Import for Android features.
+
+// Import for iOS features.
+import 'js_data_parser.dart';
+import 'js_device.dart';
+import 'js_http.dart';
+import 'js_http_overrides.dart';
+import 'jscode/js_lib.dart';
+import 'log_manager.dart';
+import 'model/js_http_info.dart';
+
+/// js_data_parser
+/// @Author ruilin
+/// @Date 2024/3/20
+///
+/// @Description JS引擎
+class JsEngine {
+  static const _VERSION = '1.0';
+  static const _TAG = 'JsEngine-console';
+  static const _CHANNEL_HTTP = 'ChannelHttp';
+  static const _CHANNEL_CALLBACK = 'ChannelCallback';
+  static const _CHANNEL_SAVE = 'ChannelSave';
+  static const _CHANNEL_READ = 'ChannelRead';
+
+  /// 引擎内置JS参数
+  static const JS_RUN_PARAMS = 'run_params';
+  static const JS_RUN_INFO = 'run_info';
+
+  /// 运行超时时间（秒）
+  static const _TIMEOUT_S = 20;
+  // WebViewController? _jsRuntime;
+  JavascriptRuntime? _jsRuntime;
+  OnJsCallback? _callback;
+  Completer<String>? _completer;
+  final _sp = SharedPreferences.getInstance();
+
+  JsEngine._();
+
+  static String get version {
+    return _VERSION;
+  }
+
+  Future<JavascriptRuntime> get jsRuntime async {
+    if (_jsRuntime != null) {
+      return _jsRuntime!;
+    }
+    _jsRuntime = await _createJsRunner()
+    ..onMessage(_CHANNEL_HTTP, (dynamic message) {
+      logI(tag: _TAG, 'JsEngine parseHttpRequest message=${message.message}');
+      var request = JsDataParser().parseHttpRequest(message.message);
+      if (request != null) {
+        logI(tag: _TAG, 'JsEngine sendRequest');
+        // 忽略证书校验
+        HttpOverrides.runWithHttpOverrides(() {
+          JsHttp().sendRequest(request).then((res) {
+            String? json = JsDataParser().parseHttpResponse(request.id, res);
+            // logD(tag: _TAG, 'JsEngine call onHttpResponse json=${json}');
+            if (request.callbackFun != null) {
+              logI(tag: _TAG, 'JsEngine call callbackFun ${request.callbackFun}');
+              _execute("${request.callbackFun}(`${json ?? ''}`)");
+            }
+          });
+        }, JsHttpOverrides());
+      }
+    })
+    ..onMessage(_CHANNEL_CALLBACK, (dynamic message) {
+      logI(tag: _TAG, 'JsEngine js callback ${message.message}');
+      if (_callback != null) {
+        _callback!(message.message.toString());
+      }
+      if (_completer != null) {
+        _completer!.complete(message.message.toString());
+      }
+    })
+    ..onMessage(_CHANNEL_SAVE, (dynamic message) {
+      var map = jsonDecode(message.message.toString());
+      _sp.then((sp) {
+        sp.setString(map['key'], map['value']);
+      });
+    })
+    ..onMessage(_CHANNEL_READ, (dynamic message) async {
+      var model = JsDataParser().parseSpRead(message.message);
+      if (model != null) {
+        var value = (await _sp).getString(model.key) ?? '';
+        var json = JsDataParser().parseSpReadResponse(model.id, value);
+        if (model.callbackFun != null) {
+          logI(tag: _TAG, 'JsEngine call callbackFun ${model.callbackFun}');
+          _execute('${model.callbackFun}(`${json ?? ''}`)');
+        }
+      }
+    });
+    var deviceInfo = await JsDevice.getDeviceInfo();
+    var deviceInfoJson = jsonEncode(deviceInfo);
+    JsLib.load(_jsRuntime, deviceInfo: deviceInfoJson);
+    return _jsRuntime!;
+  }
+
+  Future<JavascriptRuntime> _createJsRunner() async {
+    return getJavascriptRuntime();
+  }
+  // Future<WebViewController> _createJsRunner() async {
+  //   late final PlatformWebViewControllerCreationParams params;
+  //   if (WebViewPlatform.instance is WebKitWebViewPlatform) {
+  //     params = WebKitWebViewControllerCreationParams(
+  //       allowsInlineMediaPlayback: true,
+  //       mediaTypesRequiringUserAction: const <PlaybackMediaTypes>{},
+  //     );
+  //   } else {
+  //     params = const PlatformWebViewControllerCreationParams();
+  //   }
+  //   final WebViewController controller =
+  //   WebViewController.fromPlatformCreationParams(params)
+  //   ..setJavaScriptMode(JavaScriptMode.unrestricted);
+  //   return controller;
+  // }
+
+  /// 执行代码
+  Future<void> _execute(String code) async {
+    await (await jsRuntime).evaluateAsync(code).catchError((error) {
+      logE(tag: _TAG, 'runCode error: $error');
+      _completer?.complete(JsDataParser().genErrorResponse(JsHttpInfo.fromRunCodeException(error)));
+    });
+  }
+
+  static Future<String> _doTask(String code, {String? params, OnJsCallback? callback}) async {
+    Completer<String> completer = Completer();
+    Future<String> future = completer.future;
+    if (params != null) {
+      code = 'let $JS_RUN_PARAMS = `${params}`;\n${code}';
+    }
+    var engine = JsEngine._();
+    engine._callback = callback;
+    engine._completer = completer;
+    engine._execute(code);
+    
+    Future.delayed(Duration(seconds: _TIMEOUT_S), () {
+      if (!completer.isCompleted) {
+        logE(tag: _TAG, 'runCode timeout');
+        completer.complete(
+            JsDataParser().genErrorResponse(JsHttpInfo.RUN_CODE_TIMEOUT));
+      }
+    });
+    return future;
+  }
+
+  static Future<String> runCode(String code, {String? params, OnJsCallback? callback}) {
+    // _taskQueue = _taskQueue.then((_) {
+    //   return _doTask(code, params: params, callback: callback);
+    // });
+    return _doTask(code, params: params, callback: callback);
+  }
+
+  static Future<void> _taskQueue = Future.value();
+}
+
+typedef OnJsCallback = void Function(String result);
+
