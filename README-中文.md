@@ -99,5 +99,5 @@ JsEngine.runCode('''
     });
 ```
 ---
-作者：Ruilin.Z
+作者：[Ruilin.Z](https://ruilin.github.io/blog/)
 
