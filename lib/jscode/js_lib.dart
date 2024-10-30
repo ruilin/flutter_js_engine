@@ -75,15 +75,23 @@ class HttpSender {
             let jsonObj = JSON.parse(jsonString);
             let sender = HttpSender.senderBuffer.get(jsonObj.id);
             if (sender !== undefined) {
-                jsonObj.response.data = Base64.decode(jsonObj.response.data);
-                jsonObj.response.headers = Base64.decode(jsonObj.response.headers);
+                if (jsonObj.response.data !== undefined) {
+                    jsonObj.response.data = Base64.decode(jsonObj.response.data);
+                } else {
+                    jsonObj.response.data = '';
+                }
+                if (jsonObj.response.headers !== undefined) {
+                    jsonObj.response.headers = Base64.decode(jsonObj.response.headers);
+                } else {
+                    jsonObj.response.headers = '';
+                }
                 sender.resolve(jsonObj);
                 HttpSender.senderBuffer.delete(jsonObj.id);
             } else {
-                console.log('sender undefined');
+                console.log('jssender undefined');
             }
         } catch(e) {
-            console.log('onHttpResponse error:', e);
+            console.log('jssender onHttpResponse error:', e);
         }
     }
 
@@ -170,14 +178,14 @@ static var base64 = '''
         a.forEach(function (c, i) { return tab[c] = i; });
         return tab;
     })(b64chs);
-    var b64re = /^(?:[A-Za-zd+/]{4})*?(?:[A-Za-zd+/]{2}(?:==)?|[A-Za-zd+/]{3}=?)?\$/;
+    var b64re = /^(?:[A-Za-z\d+\/]{4})*?(?:[A-Za-z\d+\/]{2}(?:==)?|[A-Za-z\d+\/]{3}=?)?\$/;
     var _fromCC = String.fromCharCode.bind(String);
     var _U8Afrom = typeof Uint8Array.from === 'function'
         ? Uint8Array.from.bind(Uint8Array)
         : function (it) { return new Uint8Array(Array.prototype.slice.call(it, 0)); };
     var _mkUriSafe = function (src) { return src
-        .replace(/=/g, '').replace(/[+/]/g, function (m0) { return m0 == '+' ? '-' : '_'; }); };
-    var _tidyB64 = function (s) { return s.replace(/[^A-Za-z0-9+/]/g, ''); };
+        .replace(/=/g, '').replace(/[+\/]/g, function (m0) { return m0 == '+' ? '-' : '_'; }); };
+    var _tidyB64 = function (s) { return s.replace(/[^A-Za-z0-9\+\/]/g, ''); };
     /**
      * polyfill version of `btoa`
      */
@@ -311,7 +319,7 @@ static var base64 = '''
      */
     var atobPolyfill = function (asc) {
         // console.log('polyfilled');
-        asc = asc.replace(/s+/g, '');
+        asc = asc.replace(/\s+/g, '');
         if (!b64re.test(asc))
             throw new TypeError('malformed base64.');
         asc += '=='.slice(2 - (asc.length & 3));
@@ -363,8 +371,8 @@ static var base64 = '''
     var isValid = function (src) {
         if (typeof src !== 'string')
             return false;
-        var s = src.replace(/s+/g, '').replace(/={0,2}\$/, '');
-        return !/[^s0-9a-zA-Z+/]/.test(s) || !/[^s0-9a-zA-Z-_]/.test(s);
+        var s = src.replace(/\s+/g, '').replace(/={0,2}\$/, '');
+        return !/[^\s0-9a-zA-Z\+/]/.test(s) || !/[^\s0-9a-zA-Z\-_]/.test(s);
     };
     //
     var _noEnum = function (v) {
@@ -451,7 +459,7 @@ function run_log(log) {
 }''';
 
 static load(var jsRuntime, {deviceInfo}) {
-  var code = '$sp_storage\n$http_sender\n$base64\n$common\n';
+  var code = '${sp_storage}\n${http_sender}\n${base64}\n${common}\n';
   if (deviceInfo != null) {code = '$code\nlet ${JsEngine.JS_RUN_INFO} = $deviceInfo;';} 
     jsRuntime.runJavaScript(code);
   }

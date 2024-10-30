@@ -33,7 +33,7 @@ import 'model/js_result.dart';
 ///
 /// @Description JS引擎
 class JsEngine {
-  static const _VERSION = '1.1.0';
+  static const _VERSION = '1.1.2';
   static const _TAG = 'JsEngine-console';
   static const _CHANNEL_HTTP = 'ChannelHttp';
   static const _CHANNEL_CALLBACK = 'ChannelCallback';
